@@ -1,0 +1,142 @@
+#!/bin/bash
+LIST_DISPLAY_LINE_NUM=6
+LIST_DISPLAY_MARKER='\033[;32m*\033[0m'
+
+type_list=\
+"feat,A new feature#\
+fix,A bug fix#\
+docs,Documentation only changes#\
+style,Changes that do not affect the meaning of the code #\
+refactor,A code change that neither fixes a bug nor adds a feature#\
+perf,A code change that improves performance#\
+test,Adding missing or correcting existing tests#\
+chore,Changes to the build process or auxiliary tools and libraries such as documentation generation#"
+
+# Display 4 line type description, start by specified $1, and put a marker at 
+# $2
+# 
+# LIST_ADAPTER: 
+#	Which list(array) you want to display. With two clonm, one is
+# 	item name, and two is description(or null), seperating by ',"
+# LIST_COUNT
+#	Count of list item
+# LIST_INDEX_START:
+#	Start item
+# LIST_INDEX_SELECTED:
+#	Selected item
+# LIST_DISPLAY_DIR
+#	If defined as "back", go back to the line where list display
+# LIST_DISPLAY_LINE_NUM:
+#	Number of list to display
+# LIST_DISPLAY_MARKER:
+#	A charater, mark at the beginning of selected line
+list_display()
+{
+	# no wrap
+	echo -ne "\033[?7l"
+
+	# hide cusor
+	echo -ne "\033[?25l"
+
+	# print type and description start by $1
+	line=$LIST_INDEX_START
+	line_max=$[$LIST_INDEX_START + $LIST_DISPLAY_LINE_NUM]
+	blank_line_max=$line_max
+
+	if [ $line_max -gt ${#LIST_ADAPTER[@]} ]; then
+		line_max=${#LIST_ADAPTER[@]}
+	fi
+
+	# put item to console
+	while [ $line -lt $line_max ]
+	do
+		type=${LIST_ADAPTER[$line]}
+		IFS=','
+		type=($type)
+		echo  "  [${type[0]}] ${type[1]}"
+		line=$[ $line + 1 ]
+	done
+
+	# put blank line
+	while [ $line -lt $blank_line_max ]
+	do
+		echo
+		line=$[ $line + 1 ]
+	done
+	
+	# mark the selected item
+	mark_line=`expr $LIST_INDEX_SELECTED - $LIST_INDEX_START`
+	if [ $mark_line -lt $LIST_DISPLAY_LINE_NUM -a \
+		$mark_line -ge 0 ];then
+		# move back to first line
+		echo -ne "\E[${LIST_DISPLAY_LINE_NUM}A"
+		# move to mark line
+		if [ $mark_line -ne 0 ];then
+			# i can't move down one line
+			echo -ne "\E[${mark_line}B"
+		fi
+		# put a marker
+		echo -ne "$LIST_DISPLAY_MARKER"
+		# movo to end line
+		echo -ne "\E[$[$LIST_DISPLAY_LINE_NUM - $mark_line]B"
+	fi
+
+	# show cusor
+	echo -ne "\033[?25h"
+
+	# Go back to fist line
+	if [ "$LIST_DISPLAY_DIR" = "back" ]; then
+		echo -ne "\E[$[${LIST_DISPLAY_LINE_NUM}]A"
+	fi
+
+	# move cusor to start
+	echo -ne "\r"
+}
+
+list_select_up()
+{
+}
+
+list_select_down()
+{
+
+}
+
+# return to home position
+home()
+{
+	echo -ne "\E8"
+
+}
+
+begin()
+{
+	# clear screan, got to console home position, and save this position.
+	echo -ne "\E[H\E[2J\E7"
+}
+
+end()
+{
+	echo [finish...]
+}
+
+main()
+{
+	begin
+
+	IFS="#"
+	LIST_ADAPTER=($type_list)
+	LIST_INDEX_START=1
+	LIST_INDEX_SELECTED=3
+	LIST_COUNTS=${#LIST_ADAPTER[@)}
+	LIST_DISPLAY_DIR="back"
+	list_display
+	sleep 2s
+	LIST_INDEX_SELECTED=4
+	list_display
+	read
+
+	end
+}
+
+main
