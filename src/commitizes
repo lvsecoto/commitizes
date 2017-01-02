@@ -36,6 +36,10 @@ chore:Changes to the build process or auxiliary tools and libraries such as docu
 #	Number of list to display
 # LIST_DISPLAY_MARKER:
 #	A charater, mark at the beginning of selected line
+display_delete_line()
+{
+	echo -ne "\E[A\E[K"
+}
 
 list_adapter_to_list()
 {
@@ -147,7 +151,6 @@ list_open()
 	echo -ne "\033[?18l"
 
 	# init
-
 	list_adapter_to_list
 	LIST_COUNTS=${#LIST_LIST[@]}
 	LIST_INDEX_START=0
@@ -187,7 +190,7 @@ list_open()
 	list_display_clear
 
 	if [ -n "$LIST_TITLE" ]; then
-		echo -ne "\E[A\E[K"
+		display_delete_line
 	fi
 
 }
@@ -202,22 +205,24 @@ commit_type()
 
 commit_scope()
 {
-	echo commit_scope
+	read -p "Scope:" COMMIT_SCOPE
+	display_delete_line
 }
 
 commit_subject()
 {
-	echo commit_subject
+	read -p "Subject:" COMMIT_SUBJECT
+	display_delete_line
 }
 
 commit_body()
 {
-	echo commit_body
+	vim
 }
 
 commit_footer()
 {
-	echo commit_footer
+	vim
 }
 
 # return to home position
@@ -242,12 +247,13 @@ main()
 {
 	begin
 
-#	LIST_ADAPTER=$type_list
-#	LIST_TITLE="Chose a type"
-#	list_open
-
 	commit_type
-	echo $COMMIT_TYPE
+	commit_scope
+	commit_subject
+	commit_body
+	commit_footer
+	echo "$COMMIT_TYPE($COMMIT_SCOPE):$COMMIT_SUBJECT"
+
 }
 
 main
