@@ -3,23 +3,27 @@ LIST_DISPLAY_LINE_NUM=6
 LIST_DISPLAY_MARKER='\033[;32m*\033[0m'
 
 type_list=\
-"feat,A new feature#\
-fix,A bug fix#\
-docs,Documentation only changes#\
-style,Changes that do not affect the meaning of the code #\
-refactor,A code change that neither fixes a bug nor adds a feature#\
-perf,A code change that improves performance#\
-test,Adding missing or correcting existing tests#\
-chore,Changes to the build process or auxiliary tools and libraries such as documentation generation#"
+"feat:A new feature#\
+fix:A bug fix#\
+docs:Documentation only changes#\
+style:Changes that do not affect the meaning of the code #\
+refactor:A code change that neither fixes a bug nor adds a feature#\
+perf:A code change that improves performance#\
+test:Adding missing or correcting existing tests#\
+chore:Changes to the build process or auxiliary tools and libraries such as documentation generation#"
 
 # Display 4 line type description, start by specified $1, and put a marker at 
 # $2
 # 
 # LIST_TITLE:
-#	hint show at the top of list
+#	Hint show at the top of list
+#	If it is null, title line will not show
 # LIST_ADAPTER: 
 #	Which list(array) you want to display. With two clonm, one is
-# 	item name, and two is description(or null), seperating by ',"
+# 	item name, and two is description(or null), seperating by ':"
+#	Each item is seperated by '#'
+# LIST_LIST:
+#	Use list_adapter_to_list() to convert LIST_ADAPTER to LIST_LIST
 # LIST_COUNT
 #	Count of list item
 # LIST_INDEX_START:
@@ -32,6 +36,15 @@ chore,Changes to the build process or auxiliary tools and libraries such as docu
 #	Number of list to display
 # LIST_DISPLAY_MARKER:
 #	A charater, mark at the beginning of selected line
+
+list_adapter_to_list()
+{
+	IFS_bk=$IFS
+	IFS='#'
+	LIST_LIST=($LIST_ADAPTER)
+	IFS=$IFS_bk
+}
+
 list_display()
 {
 	# move cusor to start
@@ -43,20 +56,20 @@ list_display()
 	# hide cusor
 	echo -ne "\033[?25l"
 
-	# print type and description start by $1
 	line=$LIST_INDEX_START
 	line_max=$[$LIST_INDEX_START + $LIST_DISPLAY_LINE_NUM]
 	blank_line_max=$line_max
 
-	if [ $line_max -gt ${#LIST_ADAPTER[@]} ]; then
-		line_max=${#LIST_ADAPTER[@]}
+	if [ $line_max -gt ${#LIST_LIST[@]} ]; then
+		line_max=${#LIST_LIST[@]}
 	fi
 
+	IFS_bk=$IFS
+	IFS=':'
 	# put item to console
 	while [ $line -lt $line_max ]
 	do
-		IFS=','
-		item=(${LIST_ADAPTER[$line]})
+		item=(${LIST_LIST[$line]})
 
 		if [ $LIST_INDEX_SELECTED -eq $line ]; then
 			marker=$LIST_DISPLAY_MARKER
@@ -67,6 +80,8 @@ list_display()
 		echo  -e "$marker [${item[0]}] ${item[1]} \E[K"
 		line=$[ $line + 1 ]
 	done
+
+	IFS=$IFS_bk
 
 	# put blank line
 	while [ $line -lt $blank_line_max ]
@@ -131,11 +146,19 @@ list_open()
 	# move cusor to start
 	echo -ne "\033[?18l"
 
+	# init
+
+	list_adapter_to_list
+	LIST_COUNTS=${#LIST_LIST[@]}
 	LIST_INDEX_START=0
 	LIST_INDEX_SELECTED=0
-	LIST_COUNTS=${#LIST_ADAPTER[@]}
 	LIST_DISPLAY_DIR="back"
-	echo -e $LIST_TITLE
+
+	# title
+	if [ -n "$LIST_TITLE" ];then
+		echo -e $LIST_TITLE
+	fi
+
 	list_display
 	while [ : ]
 	do
@@ -147,17 +170,54 @@ list_open()
 			k)
 				list_select_up
 				;;
-			\n)
-				break;
-				;;
 			q)	
-				break;
+				IFS_bk=$IFS
+				IFS=':'
+				LIST_SELECT_ITEM=(${LIST_LIST[$LIST_INDEX_SELECTED]})
+				IFS=$IFS_bk
+				LIST_SELECT_ITEM_NAME=${LIST_SELECT_ITEM[0]}
+				LIST_SELECT_ITEM_DESC=${LIST_SELECT_ITEM[1]}
+				break
 				;;
 		esac
 		list_display
 	done
+
+	# clear screen
 	list_display_clear
 
+	if [ -n "$LIST_TITLE" ]; then
+		echo -ne "\E[A\E[K"
+	fi
+
+}
+
+commit_type()
+{
+	LIST_ADAPTER=$type_list
+	LIST_TITLE="Chose a type:"
+	list_open
+	COMMIT_TYPE=$LIST_SELECT_ITEM_NAME
+}
+
+commit_scope()
+{
+	echo commit_scope
+}
+
+commit_subject()
+{
+	echo commit_subject
+}
+
+commit_body()
+{
+	echo commit_body
+}
+
+commit_footer()
+{
+	echo commit_footer
 }
 
 # return to home position
@@ -182,11 +242,12 @@ main()
 {
 	begin
 
-	IFS="#"
-	LIST_ADAPTER=($type_list)
-	LIST_TITLE="Chose a type:"
-	list_open
+#	LIST_ADAPTER=$type_list
+#	LIST_TITLE="Chose a type"
+#	list_open
 
+	commit_type
+	echo $COMMIT_TYPE
 }
 
 main
