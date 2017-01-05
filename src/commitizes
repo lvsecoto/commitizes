@@ -19,10 +19,14 @@ You can use * when the change affects more than a single scope."
 commit_subject_desc="\
 The subject contains succinct description of the change:
  
-  * use the imperative, present tense: "change" not "changed" nor "changes"
+  * use the imperative, present tense: \"change\" not \"changed\" nor \"changes\"
   * don't capitalize first letter
   * no dot (.) at the end"
 
+commit_body_desc="\
+Just as in the subject, use the imperative, present tense: \"change\" not \"changed\" nor \"changes\". 
+The body should include the motivation for the change and contrast this with previous behavior.
+"
 # Display 4 line type description, start by specified $1, and put a marker at 
 # $2
 # 
@@ -102,7 +106,6 @@ list_display()
 {
 	# move cusor to start
 	display_cusor_to_start
-
 
 	local line=$LIST_INDEX_START
 	local line_max=$[$LIST_INDEX_START + $LIST_DISPLAY_LINE_NUM]
@@ -205,18 +208,17 @@ list_open()
 	fi
 
 	list_display
-
 	while [ : ]
 	do
 		read -s -N1
 		case $REPLY in
-			j)
+			j | B)
 				list_select_down
 				;;
-			k)
+			k | A)
 				list_select_up
 				;;
-			q)	
+			$'\n')	
 				local IFS_bk=$IFS
 				IFS=':'
 				LIST_SELECT_ITEM=(${LIST_LIST[$LIST_INDEX_SELECTED]})
@@ -232,9 +234,7 @@ list_open()
 	# clear screen
 	list_display_clear
 
-	if [ -n "$LIST_TITLE" ]; then
-		display_clear_line
-	fi
+	display_clear_line
 
 }
 
@@ -244,7 +244,7 @@ editor_open()
 	local title=$EDITOR_TITLE
 	local descs=""
 	local -i desc_line=0
-	local read_cusor_pos=$[${#EDITOR_TITLE} + 1]
+	local read_cusor_pos=$[${#EDITOR_TITLE}]
 
 	IFS=$'\n'
 	descs=($EDITOR_DESC)
@@ -280,40 +280,90 @@ editor_open()
 
 ex_editor_open()
 {
+	local title=$EX_EDITOR_TITLE
+	local template=$EX_EDITOR_TEMPLATE
+	local -i template_start_line=0
 	local IFS_bk=$IFS
 	IFS=$'\n'
-	local desc=($EX_EDITOR_DESC)
+	local descs=($EX_EDITOR_DESC)
 	IFS=$IFS_bk
 	local -i desc_line=0
+	
+	echo -en "" > tmp
 
-	echo "" > tmp
+	# title
+	if [ "$title" != "" ];then
+		echo "# $title" >> tmp
+	fi
+
+	# blank line for edit
+	if [ "$template" != "" ]; then
+		echo -ne "$template\n" >> tmp
+		template_start_line=$EX_EDITOR_TEMPLATE_START_LINE
+	else
+		echo -en "\n\n\n" >> tmp
+		template_start_line=0
+	fi
+
+	echo "####################################" >> tmp
+	echo "# LINE START WITH # WILL BE IGNORE #" >> tmp
+	echo "####################################" >> tmp
+	echo "" >> tmp
+
+	# description
 	while [ $desc_line -lt ${#descs[@]} ]
 	do
-		echo ${descs[@]} >> tmp
+		echo "# ${descs[$desc_line]}" >> tmp
+		desc_line=$[ $desc_line + 1 ]
 	done
 		
-	vim tmp
+	# open vim editor
+	if [ "$title" != "" ];then
+		vim tmp +$[ 2 + $template_start_line] -c "set cc=100"
+	else
+		vim tmp +$[ 1 + $template_start_line] -c "set cc=100"
+	fi
 
+	# delete line start with '#'
+	EX_EDITOR_RESAULT=`grep tmp -v -e "^#"`
+
+	rm tmp
 }
+
 commit_get_header()
 {
 	local _type="unknow"
 	local scope=""
 	local subject=""
 
-	if [ -n "$COMMIT_SCOPE" ];then
+	if [ "$COMMIT_SCOPE" != ""  ];then
 		scope="($COMMIT_SCOPE)"
 	fi
 
-	if [ -n "$_type" ];then
+	subject=$COMMIT_SUBJECT
+
+	if [ "$COMMIT_TYPE" != "" ];then
 		_type=$COMMIT_TYPE
+		COMMIT_HEADER="${_type}${scope}: ${subject}"
+	else
+		COMMIT_HEADER=""
 	fi
 
-	if [ -n "$subject" ];then
-		subject=$COMMIT_SUBJECT
-	fi
 
-	COMMIT_HEADER="${_type}${scope}: ${subject}"
+}
+
+commit_get_all()
+{
+	commit_get_header
+	COMMIT_ALL="$COMMIT_HEADER"$'\n'
+
+	if [ "$COMMIT_BODY" != "" ];then
+		COMMIT_ALL="COMMIT_ALL$COMMIT_BODY"$'\n'
+	fi
+	
+	if [ "$COMMIT_FOOTER" != "" ];then
+		COMMIT_ALL="$COMMIT_ALL"$'\n'"BREAKING CHANGE:"$'\n\n\n'"$COMMIT_FOOTER"
+	fi
 }
 
 commit_type()
@@ -345,12 +395,53 @@ commit_subject()
 
 commit_body()
 {
-	vim
+	EX_EDITOR_TITLE="Body:"
+	EX_EDITOR_DESC="\
+$commit_body_desc
+ 
+Git Status: 
+`git status -s -b`"
+	EX_EDITOR_TEMPLATE=""
+	
+	ex_editor_open
+	COMMIT_BODY="$EX_EDITOR_RESAULT"
 }
 
 commit_footer()
 {
-	vim
+	EX_EDITOR_TITLE="Footer:"
+	EX_EDITOR_DESC="\
+$commit_body_desc
+ 
+Git Status: 
+`git status -s -b`"
+	EX_EDITOR_TEMPLATE=""
+
+	ex_editor_open
+	COMMIT_FOOTER="$EX_EDITOR_RESAULT"
+}
+
+commit_confirm()
+{
+	commit_get_all
+
+	local IFS_bk=$IFS
+	IFS=$'\n'
+	local commit=($COMMIT_ALL)
+	IFS=$IFS_bk
+	
+	local -i commit_line=0
+
+	while [ $commit_line -lt ${#commit[@]} ]
+	do
+		display_line ${commit[$commit_line]}
+		commit_line=$[ $commit_line + 1 ]
+	done
+	
+	LIST_TITLE="Commit?"
+	LIST_ADAPTER="Yes:
+No:"
+	list_open
 }
 
 # return to home position
@@ -378,12 +469,12 @@ main()
 {
 	begin
 
-	commit_type
-	commit_scope
-	commit_subject
+#	commit_type
+#	commit_scope
+#	commit_subject
 #	commit_body
 #	commit_footer
-	echo "$COMMIT_TYPE($COMMIT_SCOPE):$COMMIT_SUBJECT"
+	commit_confirm
 
 }
 
