@@ -70,7 +70,7 @@ display_hide_cusor()
 display_line()
 {
 	DISPLAY_LINE=$[$DISPLAY_LINE + 1];
-	echo $1
+	echo -e $1
 }
 
 display_delete_line()
@@ -362,7 +362,7 @@ commit_get_all()
 	fi
 	
 	if [ "$COMMIT_FOOTER" != "" ];then
-		COMMIT_ALL="$COMMIT_ALL"$'\n'"BREAKING CHANGE:"$'\n\n\n'"$COMMIT_FOOTER"
+		COMMIT_ALL="$COMMIT_ALL"$'\n'"BREAKING CHANGE:"$'\n \n \n'"$COMMIT_FOOTER"
 	fi
 }
 
@@ -434,9 +434,18 @@ commit_confirm()
 
 	while [ $commit_line -lt ${#commit[@]} ]
 	do
-		display_line ${commit[$commit_line]}
+		local line="${commit[$commit_line]}"
+
+		if [ "$line" == " " ];then
+			display_line " "
+		else
+			display_line "${commit[$commit_line]}"
+		fi
 		commit_line=$[ $commit_line + 1 ]
 	done
+
+	display_line ""
+	display_line "======================================================"
 	
 	LIST_TITLE="Commit?"
 	LIST_ADAPTER="Yes:
@@ -473,7 +482,7 @@ main()
 #	commit_scope
 #	commit_subject
 #	commit_body
-#	commit_footer
+	commit_footer
 	commit_confirm
 
 }
