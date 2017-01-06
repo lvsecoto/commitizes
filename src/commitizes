@@ -20,13 +20,16 @@ commit_subject_desc="\
 The subject contains succinct description of the change:
  
   * use the imperative, present tense: \"change\" not \"changed\" nor \"changes\"
-  * don't capitalize first letter
+  \033[;31m* don't capitalize first letter\033[0m
   * no dot (.) at the end"
 
 commit_body_desc="\
 Just as in the subject, use the imperative, present tense: \"change\" not \"changed\" nor \"changes\". 
 The body should include the motivation for the change and contrast this with previous behavior.
 "
+commit_breaking_changes_desc="\
+"
+
 # Display 4 line type description, start by specified $1, and put a marker at 
 # $2
 # 
@@ -352,17 +355,37 @@ commit_get_header()
 
 }
 
+commit_get_footer()
+{
+	COMMIT_FOOTER=""
+
+	if [ "$COMMIT_BREAKING_CHANGE" != "" ];then
+		COMMIT_FOOTER="$COMMIT_FOOTER"$'\n \n'"BREAKING CHANGE:"$'\n \n \n'"$COMMIT_BREAKING_CHANGE"
+	fi
+	
+	if [ "$COMMIT_CLOSED_ISSUES" != "" ];then
+		COMMIT_FOOTER="$COMMIT_FOOTER"$'\n \n'"$COMMIT_CLOSED_ISSUES"
+	fi
+
+	if [ "$COMMIT_EXTRA" != "" ];then
+		COMMIT_FOOTER="$COMMIT_FOOTER"$'\n \n'"$COMMIT_EXTRA"
+	fi
+
+}
+
 commit_get_all()
 {
 	commit_get_header
+	commit_get_footer
+
 	COMMIT_ALL="$COMMIT_HEADER"$'\n'
 
 	if [ "$COMMIT_BODY" != "" ];then
-		COMMIT_ALL="COMMIT_ALL$COMMIT_BODY"$'\n'
+		COMMIT_ALL="$COMMIT_ALL"$'\n \n'"$COMMIT_BODY"$'\n'
 	fi
 	
 	if [ "$COMMIT_FOOTER" != "" ];then
-		COMMIT_ALL="$COMMIT_ALL"$'\n'"BREAKING CHANGE:"$'\n \n \n'"$COMMIT_FOOTER"
+		COMMIT_ALL="$COMMIT_ALL$COMMIT_FOOTER"
 	fi
 }
 
@@ -395,6 +418,7 @@ commit_subject()
 
 commit_body()
 {
+	COMMIT_BODY=""
 	EX_EDITOR_TITLE="Body:"
 	EX_EDITOR_DESC="\
 $commit_body_desc
@@ -407,18 +431,80 @@ Git Status:
 	COMMIT_BODY="$EX_EDITOR_RESAULT"
 }
 
-commit_footer()
+commit_breaking_change()
 {
-	EX_EDITOR_TITLE="Footer:"
-	EX_EDITOR_DESC="\
-$commit_body_desc
- 
-Git Status: 
-`git status -s -b`"
+	COMMIT_BREAKING_CHANGE=""
+	EX_EDITOR_TITLE="\"BREAKING CHANGE:\" will automatically add to commit message"
 	EX_EDITOR_TEMPLATE=""
+	EX_EDITOR_DESC=""
 
 	ex_editor_open
-	COMMIT_FOOTER="$EX_EDITOR_RESAULT"
+
+	COMMIT_BREAKING_CHANGE="$EX_EDITOR_RESAULT"
+
+}
+
+commit_closed_issues()
+{
+	COMMIT_CLOSED_ISSUES=""
+	EDITOR_TITLE="Enter the issues number, separatting by ' ': "
+	EDITOR_DESC=""
+	editor_open
+
+	local IFS_bk=$IFS
+	IFS=$' '
+	local issues=(`echo $EDITOR_RESAULT | sed -e "s/[^0-9 ]//g"`)
+	IFS=$IFS_bk
+	local issue=""
+
+	COMMIT_CLOSED_ISSUES=""
+	for issue in ${issues[*]}
+	do
+		COMMIT_CLOSED_ISSUES="${COMMIT_CLOSED_ISSUES}Closes #$issue"$'\n'
+	done
+
+}
+
+commit_extra()
+{
+	COMMIT_EXTRA=""
+	EX_EDITOR_TITLE="Extra messages:"
+	EX_EDITOR_TEMPLATE=""
+	EX_EDITOR_DESC=""
+
+	ex_editor_open
+
+	COMMIT_EXTRA="$EX_EDITOR_RESAULT"
+}
+
+commit_footer()
+{
+	LIST_ADAPTER="\
+Breaking Change
+Close issues
+Extra
+Finish
+"
+	LIST_TITLE="Chose a footer operation:"
+
+	while [ 1 -eq 1 ]
+	do
+		list_open
+		case "$LIST_SELECT_ITEM_NAME" in
+			"Breaking Change" )
+				commit_breaking_change
+				;;
+			"Close issues" )
+				commit_closed_issues
+				;;
+			"Extra" )
+				commit_extra
+				;;
+			"Finish" | * )
+				break
+				;;
+		esac
+	done
 }
 
 commit_confirm()
@@ -444,13 +530,16 @@ commit_confirm()
 		commit_line=$[ $commit_line + 1 ]
 	done
 
-	display_line ""
 	display_line "======================================================"
 	
 	LIST_TITLE="Commit?"
-	LIST_ADAPTER="Yes:
-No:"
+	LIST_ADAPTER="yes:
+no:"
 	list_open
+	
+	if [ $LIST_SELECT_ITEM_NAME == "yes" ];then
+		echo -ne "$COMMIT_ALL" | git commit -F - 
+	fi
 }
 
 # return to home position
@@ -467,6 +556,9 @@ begin()
 
 	# no wrap
 	echo -ne "\033[?7l"
+
+	# ^C to clear screen and quit
+	trap "home;echo -ne \"\E[H\E[2J\";display_show_cusor;exit" 2
 }
 
 end()
@@ -478,12 +570,13 @@ main()
 {
 	begin
 
-#	commit_type
-#	commit_scope
-#	commit_subject
-#	commit_body
+	commit_type
+	commit_scope
+	commit_subject
+	commit_body
 	commit_footer
 	commit_confirm
+
 
 }
 
